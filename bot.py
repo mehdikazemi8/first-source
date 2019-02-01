@@ -1,18 +1,29 @@
-from enum import Enum
-
 import pandas as pd
 from telegram.ext import CommandHandler, MessageHandler, Filters
 from telegram.ext import Updater
 
 
-class CurrentState(Enum):
-    CAT1 = 1
-    CAT2 = 2
-    CAT3 = 3
+def get_possible_columns_for_question():
+    return {'cat1', 'cat2', 'cat3', 'city', 'brand', 'type', 'year'}
 
 
-def get_all_options(df, column):
-    all_options = [opt for opt in list(df[column].unique()) if opt is not None]
+def get_column_name(column):
+    name_dict = {'cat1': 'Category',
+                 'cat2': 'First SubCategory',
+                 'cat3': 'Second SubCategory',
+                 'city': 'City',
+                 'brand': 'Brand Name',
+                 'type': 'Clothing Type',
+                 'year': 'Year',
+                 'price': 'Price Range'}
+
+    if column in name_dict:
+        return name_dict[column]
+    return column
+
+
+def get_all_options(df, conditions, column):
+    all_options = [opt for opt in list(df[prepare_conditions(df, conditions)][column].unique()) if opt is not None and not pd.isna(opt)]
     return all_options
 
 
@@ -67,18 +78,6 @@ def do_log(update):
     logging.close()
 
 
-def start(bot, update):
-    global current_state, cat1, conditions
-
-    do_log(update)
-    conditions = []
-    cat1 = get_all_options(df, 'cat1')
-    message = "Which category do you want to search?\n" + make_str_from(cat1)
-    bot.send_message(chat_id=update.message.chat_id, text=message)
-
-    current_state = CurrentState.CAT1
-
-
 def prepare_conditions(df, conditions):
     if len(conditions) == 0:
         return df['id'] > 0
@@ -89,41 +88,65 @@ def prepare_conditions(df, conditions):
     return result
 
 
+def get_next_column(df, conditions):
+    for column in get_possible_columns_for_question():
+        if column not in [x for x, y in conditions]:
+            if len(get_all_options(df, conditions, column)) > 0:
+                return column
+
+    return None
+
+
+def get_conditions_str(conditions):
+    if len(conditions) == 0:
+        return ""
+
+    res = "Current choice:\n"
+    for column, value in conditions:
+        res = res + "    " + get_column_name(column) + " -> " + value + "\n"
+
+    res = res + "\n"
+
+    return res
+
+
+def start(bot, update):
+    global current_column, conditions, level_dict
+
+    do_log(update)
+
+    current_column = 'cat1'
+    level_dict = dict()
+    conditions = []
+
+    options = get_all_options(df, conditions, 'cat1')
+    level_dict['cat1'] = options
+    message = "In which category do you want to search?\n" + make_str_from(options)
+    bot.send_message(chat_id=update.message.chat_id, text=message)
+
+
 def handle_text(bot, update):
-    global current_state, cat1, cat2, cat3, conditions
+    global current_column, conditions, level_dict
 
-    print("CurrentState ->", current_state)
-    print("Conditions ->", conditions)
+    print("aa CurrentState ->", current_column)
+    print("aa Conditions ->", conditions)
 
-    if current_state == CurrentState.CAT1:
-        idx = int(update.message.text)
-        conditions.append(('cat1', cat1[idx]))
-        cat2 = list(df[prepare_conditions(df, conditions)]['cat2'].unique())
-        message = "Choose one?\n" + make_str_from(cat2)
+    idx = int(update.message.text)
+    conditions.append((current_column, level_dict[current_column][idx]))
+
+    next_column = get_next_column(df, conditions)
+
+    if next_column is not None:
+        current_column = next_column
+        options = get_all_options(df, conditions, current_column)
+        level_dict[current_column] = options
+        message = get_conditions_str(conditions) + "Choose one?\n" + make_str_from(options)
         bot.send_message(chat_id=update.message.chat_id, text=message)
+    else:
+        print("only price remains")
 
-        current_state = CurrentState.CAT2
-
-    elif current_state == CurrentState.CAT2:
-        idx = int(update.message.text)
-        conditions.append(('cat2', cat2[idx]))
-        cat3 = list(df[prepare_conditions(df, conditions)]['cat3'].unique())
-        message = "Choose one?\n" + make_str_from(cat3)
-        bot.send_message(chat_id=update.message.chat_id, text=message)
-
-        current_state = CurrentState.CAT3
-
-    elif current_state == CurrentState.CAT3:
-
-        idx = int(update.message.text)
-        conditions.append(('cat3', cat3[idx]))
-        message = "There are {} options".format(len(df[prepare_conditions(df, conditions)]))
-        bot.send_message(chat_id=update.message.chat_id, text=message)
-
-        print("Conditions ->", conditions)
-
-    print("CurrentState ->", current_state)
-    print("Conditions ->", conditions)
+    print("bb CurrentState ->", current_column)
+    print("bb Conditions ->", conditions)
 
 
 updater = Updater(token='783418650:AAGAuqiOzVC3FMFsous2Hs_a9DU8AUdy_rQ')
@@ -134,10 +157,8 @@ df = pd.read_csv('divar.csv')
 print(df.columns)
 print("Data is ready!\n")
 
-current_state = CurrentState(CurrentState.CAT1)
-cat1 = []
-cat2 = []
-cat3 = []
+current_column = 'cat1'
+level_dict = dict()
 conditions = []
 
 start_handler = CommandHandler('start', start)
