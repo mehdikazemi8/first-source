@@ -112,13 +112,14 @@ def get_conditions_str(conditions):
 
 
 def start(bot, update):
-    global current_column, conditions, level_dict
+    global current_column, conditions, level_dict, sent_to_user_ids
 
     do_log(update)
 
     current_column = 'cat1'
     level_dict = dict()
     conditions = []
+    sent_to_user_ids = set()
 
     options = get_all_options(df, conditions, 'cat1')
     level_dict['cat1'] = options
@@ -163,12 +164,16 @@ def send_five_options_to_user(bot, update, results):
 
     for index, row in results.iterrows():
         # print(row['c1'], row['c2'])
-        message = "{}\n\n{}\n\n{}".format(row['title'], row['price'], row['desc'])
-        bot.send_message(chat_id=update.message.chat_id, text=message)
 
-        cnt += 1
-        if cnt == 5:
-            break
+        if row['id'] not in sent_to_user_ids:
+            sent_to_user_ids.add(row['id'])
+
+            message = "{}\n\n{}\n\n{}".format(row['title'], row['price'], row['desc'])
+            bot.send_message(chat_id=update.message.chat_id, text=message)
+
+            cnt += 1
+            if cnt == 5:
+                break
 
 
 def handle_price(bot, update, conditions):
@@ -195,6 +200,7 @@ def handle_price(bot, update, conditions):
         results = results[(results['price'] >= price_options[idx][0]) & (results['price'] <= price_options[idx][1])]
         print("yy", len(results))
 
+        # todo for pagination need to save user's price range selection
         send_five_options_to_user(bot, update, results)
 
     else:
@@ -253,6 +259,7 @@ current_column = 'cat1'
 level_dict = dict()
 conditions = []
 price_options = []
+sent_to_user_ids = set()
 
 start_handler = CommandHandler('start', start)
 dispatcher.add_handler(start_handler)
