@@ -125,6 +125,52 @@ def start(bot, update):
     bot.send_message(chat_id=update.message.chat_id, text=message)
 
 
+def generate_price_groups(prices):
+    prices = set(prices)
+
+    prices.remove(-1)
+
+    min_price = min(prices)
+    max_price = max(prices)
+
+    step = (max_price - min_price) // 5
+    step = step + step % 1000
+    result = []
+
+    current = min_price
+
+    while current < max_price:
+        print(current)
+        result.append((current, current + step))
+        current += step
+
+    return result
+
+
+def generate_prices_str(price_options):
+    result = ""
+    ii = 0
+    # todo, convert 1000 to 1,000
+    for from_price, to_price in price_options:
+        result = result + "{} : from {} to {}\n".format(ii, from_price, to_price)
+        ii += 1
+    return result
+
+
+def handle_price(bot, update, conditions):
+    global price_options
+
+    message = get_conditions_str(conditions)
+
+    next_column = 'price'
+    options = get_all_options(df, conditions, next_column)
+    message = message + "There are {} products with these criteria".format(len(options)) + "\n"
+
+    price_options = generate_price_groups(options)
+    message = message + "Choose price range?\n" + generate_prices_str(price_options)
+    bot.send_message(chat_id=update.message.chat_id, text=message)
+
+
 def handle_text(bot, update):
     global current_column, conditions, level_dict
 
@@ -144,6 +190,11 @@ def handle_text(bot, update):
         bot.send_message(chat_id=update.message.chat_id, text=message)
     else:
         print("only price remains")
+        # next_column = 'price'
+        # options = get_all_options(df, conditions, next_column)
+        # print("only price remains " + str(len(options)))
+
+        handle_price(bot, update, conditions)
 
     print("bb CurrentState ->", current_column)
     print("bb Conditions ->", conditions)
@@ -160,6 +211,7 @@ print("Data is ready!\n")
 current_column = 'cat1'
 level_dict = dict()
 conditions = []
+price_options = []
 
 start_handler = CommandHandler('start', start)
 dispatcher.add_handler(start_handler)
