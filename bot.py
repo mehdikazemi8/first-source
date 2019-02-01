@@ -90,6 +90,7 @@ def prepare_conditions(df, conditions):
 
 def get_next_column(df, conditions):
     for column in get_possible_columns_for_question():
+        print("get_next_column", column)
         if column not in [x for x, y in conditions]:
             if len(get_all_options(df, conditions, column)) > 0:
                 return column
@@ -158,17 +159,20 @@ def generate_prices_str(price_options):
 
 
 def handle_price(bot, update, conditions):
-    global price_options
+    global price_options, current_column
 
-    message = get_conditions_str(conditions)
+    print("handle_price")
 
-    next_column = 'price'
-    options = get_all_options(df, conditions, next_column)
-    message = message + "There are {} products with these criteria".format(len(options)) + "\n"
-
-    price_options = generate_price_groups(options)
-    message = message + "Choose price range?\n" + generate_prices_str(price_options)
-    bot.send_message(chat_id=update.message.chat_id, text=message)
+    if current_column is 'price':
+        pass
+    else:
+        message = get_conditions_str(conditions)
+        current_column = 'price'
+        options = get_all_options(df, conditions, current_column)
+        message = message + "There are {} products with these criteria".format(len(options)) + "\n"
+        price_options = generate_price_groups(options)
+        message = message + "Choose price range?\n" + generate_prices_str(price_options)
+        bot.send_message(chat_id=update.message.chat_id, text=message)
 
 
 def handle_text(bot, update):
@@ -178,23 +182,29 @@ def handle_text(bot, update):
     print("aa Conditions ->", conditions)
 
     idx = int(update.message.text)
-    conditions.append((current_column, level_dict[current_column][idx]))
 
-    next_column = get_next_column(df, conditions)
-
-    if next_column is not None:
-        current_column = next_column
-        options = get_all_options(df, conditions, current_column)
-        level_dict[current_column] = options
-        message = get_conditions_str(conditions) + "Choose one?\n" + make_str_from(options)
-        bot.send_message(chat_id=update.message.chat_id, text=message)
-    else:
-        print("only price remains")
-        # next_column = 'price'
-        # options = get_all_options(df, conditions, next_column)
-        # print("only price remains " + str(len(options)))
-
+    if current_column is 'price':
         handle_price(bot, update, conditions)
+
+    else:
+        conditions.append((current_column, level_dict[current_column][idx]))
+        next_column = get_next_column(df, conditions)
+
+        print("nowww next_column", next_column)
+
+        if next_column is not None and current_column is not 'price':
+            current_column = next_column
+            options = get_all_options(df, conditions, current_column)
+            level_dict[current_column] = options
+            message = get_conditions_str(conditions) + "Choose one?\n" + make_str_from(options)
+            bot.send_message(chat_id=update.message.chat_id, text=message)
+        else:
+            print("only price remains")
+            # next_column = 'price'
+            # options = get_all_options(df, conditions, next_column)
+            # print("only price remains " + str(len(options)))
+
+            handle_price(bot, update, conditions)
 
     print("bb CurrentState ->", current_column)
     print("bb Conditions ->", conditions)
