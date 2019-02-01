@@ -158,17 +158,50 @@ def generate_prices_str(price_options):
     return result
 
 
+def send_five_options_to_user(bot, update, results):
+    cnt = 0
+
+    for index, row in results.iterrows():
+        # print(row['c1'], row['c2'])
+        message = "{}\n\n{}\n\n{}".format(row['title'], row['price'], row['desc'])
+        bot.send_message(chat_id=update.message.chat_id, text=message)
+
+        cnt += 1
+        if cnt == 5:
+            break
+
+
 def handle_price(bot, update, conditions):
     global price_options, current_column
 
     print("handle_price")
 
     if current_column is 'price':
-        pass
+        idx = int(update.message.text)
+        message = get_conditions_str(conditions)
+        message = message + "    Price : from {} to {}".format(price_options[idx][0], price_options[idx][1])
+
+        final_conditions = prepare_conditions(df, conditions)
+
+        print("xx", len(df[final_conditions]))
+
+        # final_conditions = final_conditions & (df['price'] >= price_options[idx][0])
+        # final_conditions = final_conditions & (df['price'] <= price_options[idx][1])
+
+        # message = message + "\n\nThere are {} products.\n".format(len(results))
+        bot.send_message(chat_id=update.message.chat_id, text=message)
+
+        results = df[final_conditions].copy()
+        results = results[(results['price'] >= price_options[idx][0]) & (results['price'] <= price_options[idx][1])]
+        print("yy", len(results))
+
+        send_five_options_to_user(bot, update, results)
+
     else:
         message = get_conditions_str(conditions)
         current_column = 'price'
         options = get_all_options(df, conditions, current_column)
+        # todo, bugfix, len(options) shows the number of unique items, not all of them, fix later
         message = message + "There are {} products with these criteria".format(len(options)) + "\n"
         price_options = generate_price_groups(options)
         message = message + "Choose price range?\n" + generate_prices_str(price_options)
@@ -181,18 +214,16 @@ def handle_text(bot, update):
     print("aa CurrentState ->", current_column)
     print("aa Conditions ->", conditions)
 
-    idx = int(update.message.text)
-
     if current_column is 'price':
         handle_price(bot, update, conditions)
-
     else:
+        idx = int(update.message.text)
         conditions.append((current_column, level_dict[current_column][idx]))
         next_column = get_next_column(df, conditions)
 
         print("nowww next_column", next_column)
 
-        if next_column is not None and current_column is not 'price':
+        if next_column is not None:
             current_column = next_column
             options = get_all_options(df, conditions, current_column)
             level_dict[current_column] = options
